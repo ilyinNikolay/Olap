@@ -1,0 +1,161 @@
+import React, { useEffect, useState } from 'react';
+import Highcharts from 'highcharts/highmaps';
+import HighchartsReact from 'highcharts-react-official';
+import geoJsonRussia from './rus_simple_highcharts.geo.json'; // GeoJSON для России
+import geoJsonWorld from './world_geo.json'; // GeoJSON для мира
+
+Highcharts.setOptions({
+    credits: {
+        enabled: false,
+    },
+});
+
+const MapComponent = () => {
+    const [yourDataArray, setYourDataArray] = useState([]);
+    const [colorStops, setColorStops] = useState(3); // Начальное количество цветов
+    const [isWorldMap, setIsWorldMap] = useState(false); // Состояние для выбора карты
+    const [colorPalette, setColorPalette] = useState('palette1'); // Выбор палитры
+
+    useEffect(() => {
+        const fetchGeoJsonData = async () => {
+            const geoJson = isWorldMap ? geoJsonWorld : geoJsonRussia; // Выбор GeoJSON
+            let dataArray;
+
+            // Генерация данных для карты
+            if (isWorldMap) {
+                dataArray = geoJson.features.map((feature) => ({
+                    'hc-key': feature.properties['hc-key'],
+                    value: Math.random(),
+                }));
+            } else {
+                // Если это карта России, то поворачиваем координаты
+                dataArray = geoJson.features.map((feature) => ({
+                    'hc-key': feature.properties['hc-key'],
+                    value: Math.random(),
+                }));
+
+                // Поворот карты России
+                const angle = -15; // Угол поворота
+                const radians = angle * (Math.PI / 180);
+                const cos = Math.cos(radians);
+                const sin = Math.sin(radians);
+
+                geoJson.features.forEach(feature => {
+                    feature.geometry.coordinates.forEach(polygon => {
+                        polygon.forEach(coords => {
+                            coords.forEach(point => {
+                                const x = point[0] * cos - point[1] * sin;
+                                const y = point[0] * sin + point[1] * cos;
+                                point[0] = x;
+                                point[1] = y;
+                            });
+                        });
+                    });
+                });
+            }
+
+            setYourDataArray(dataArray);
+        };
+
+        fetchGeoJsonData();
+    }, [isWorldMap]); // Запуск при изменении карты
+
+    const getColorAxisStops = () => {
+        const palettes = {
+            palette1: {
+                low: '#FF0000',   // Красный
+                mid: colorStops === 2 ? '#1ac71d' : '#FFA500', // Оранжевый
+                high: '#008000',  // Зеленый
+            },
+            palette2: {
+                low: '#006eff',   // Синий
+                mid: colorStops === 2 ? '#00FFFF' : '#00FF00', // Бирюзовый
+                high: '#ffffff',  // Желтый
+            },
+            palette3: {
+                low: '#800080',   // Пурпурный
+                mid: colorStops === 2 ? '#FF00FF' : '#FF7F00', // Розовый
+                high: '#FF0000',  // Красный
+            },
+        };
+
+        const colors = palettes[colorPalette];
+
+        return [
+            [0, colors.low],
+            [0.5, colors.mid],
+            [1, colors.high],
+        ];
+    };
+
+    const createMapOptions = () => {
+        const geoJson = isWorldMap ? geoJsonWorld : geoJsonRussia; // Выбор GeoJSON
+        return {
+            chart: {
+                map: geoJson,
+                accessibility: {
+                    enabled: false,
+                },
+                width: 1200,
+                height: 800,
+            },
+            title: {
+                text: isWorldMap ? 'Карта Мира' : 'Карта Регионов России',
+            },
+            legend: {
+                enabled: true, // Включаем легенду
+            },
+            colorAxis: {
+                min: 0,
+                max: 1,
+                stops: getColorAxisStops(),
+            },
+            series: [{
+                data: yourDataArray,
+                mapData: geoJson,
+                joinBy: 'hc-key',
+                name: 'Значение по регионам',
+                states: {
+                    hover: {
+                        color: '#BADA55',
+                    },
+                },
+                dataLabels: {
+                    enabled: false,
+                },
+            }],
+        };
+    };
+
+    return (
+        <div style={{
+            display: 'flex',
+            flexDirection: 'column',
+            alignItems: 'center',
+            height: '100vh',
+            padding: '20px',
+        }}>
+            <div style={{ marginBottom: '20px' }}>
+                <button onClick={() => setIsWorldMap(false)}>Карта России</button>
+                <button onClick={() => setIsWorldMap(true)}>Карта Мира</button>
+                <button onClick={() => setColorStops(2)}>2 Цвета</button>
+                <button onClick={() => setColorStops(3)}>3 Цвета</button>
+
+                <select value={colorPalette} onChange={(e) => setColorPalette(e.target.value)}>
+                    <option value="palette1">Палитра 1</option>
+                    <option value="palette2">Палитра 2</option>
+                    <option value="palette3">Палитра 3</option>
+                </select>
+            </div>
+            {yourDataArray.length > 0 && (
+                <HighchartsReact
+                    highcharts={Highcharts}
+                    constructorType={'mapChart'}
+                    options={createMapOptions()}
+                />  
+            )}
+        </div>
+    );
+};
+
+export default MapComponent;
